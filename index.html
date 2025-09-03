@@ -1,0 +1,2125 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Permainan Interaktif: Kuis, Isian, & Puzzle Gambar</title>
+    <!-- Memuat Tailwind CSS untuk styling yang responsif dan modern -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Memuat PeerJS untuk koneksi P2P -->
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <!-- Memuat jsPDF dan html2canvas untuk fungsionalitas unduh PDF -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <style>
+        /* Mengimpor font 'Poppins' dari Google Fonts */
+        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap');
+        
+        body {
+            font-family: 'Poppins', sans-serif;
+            background: linear-gradient(135deg, #f5f7fa, #c3cfe2);
+            color: #333;
+        }
+
+        .main-container {
+            background-color: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(5px);
+            border-radius: 1.5rem;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            padding: 2.5rem;
+            max-width: 1200px;
+            width: 95%;
+        }
+
+        .btn {
+            transition: background-color 0.3s ease, transform 0.2s ease;
+        }
+        .btn:hover {
+            transform: scale(1.05);
+        }
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .modal-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-color: rgba(0, 0, 0, 0.6);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 50;
+        }
+        .modal-content {
+            background-color: white;
+            padding: 2rem;
+            border-radius: 1rem;
+            max-width: 90%;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+        
+        .leaderboard-entry {
+            transition: all 0.5s ease;
+        }
+        
+        .tab-btn {
+            cursor: pointer;
+            padding: 0.75rem 1.5rem;
+            border-radius: 0.5rem;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+        .tab-btn.active {
+            background-color: #4f46e5;
+            color: white;
+            box-shadow: 0 4px 14px 0 rgba(79, 70, 229, 0.39);
+        }
+        .tab-btn:not(.active) {
+            background-color: #e0e7ff;
+            color: #4f46e5;
+        }
+        #puzzle-canvas, #creator-puzzle-preview {
+            border: 2px solid #ddd;
+            border-radius: 0.5rem;
+            cursor: pointer;
+        }
+        .game-buttons {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            margin-top: 1.5rem;
+        }
+        @media (min-width: 640px) {
+            .game-buttons {
+                flex-direction: row;
+                justify-content: center;
+            }
+        }
+        .wordsearch-grid {
+            display: grid;
+            grid-template-columns: repeat(20, minmax(0, 1fr));
+            grid-template-rows: repeat(20, minmax(0, 1fr));
+            gap: 2px;
+            border: 2px solid #4f46e5;
+            border-radius: 0.5rem;
+            padding: 0.25rem;
+            background-color: #fff;
+            user-select: none;
+            touch-action: none;
+            font-family: monospace;
+            font-size: 1.1rem;
+            text-transform: uppercase;
+        }
+        .grid-cell {
+            aspect-ratio: 1 / 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            border-radius: 0.25rem;
+            transition: background-color 0.2s ease;
+        }
+        .grid-cell.selected {
+            background-color: #c7d2fe;
+            color: #4f46e5;
+            font-weight: bold;
+        }
+        .word-found {
+            background-color: #10b981 !important;
+            color: white !important;
+            font-weight: bold;
+        }
+        .wordsearch-list {
+            list-style: none;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 0.5rem;
+            padding: 0;
+            margin-top: 1rem;
+        }
+        .wordsearch-word {
+            background-color: #e0e7ff;
+            color: #4f46e5;
+            padding: 0.5rem 1rem;
+            border-radius: 9999px;
+            font-weight: 600;
+            transition: background-color 0.3s ease;
+        }
+        .wordsearch-word.found {
+            background-color: #10b981;
+            color: white;
+            text-decoration: line-through;
+        }
+        #whack-a-mole-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            grid-template-rows: repeat(3, 1fr);
+            gap: 1rem;
+            width: 100%;
+            max-width: 400px;
+            height: 400px;
+            margin: 0 auto;
+            border: 4px solid #4f46e5;
+            border-radius: 1rem;
+            background-color: #fff;
+            padding: 1rem;
+        }
+        .mole-hole {
+            background-color: #a3a3a3;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            overflow: hidden;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        .mole-hole.active {
+            background-color: #6b7280;
+        }
+        .mole {
+            width: 90%;
+            height: 90%;
+            background-color: #4f46e5;
+            border-radius: 50%;
+            position: absolute;
+            bottom: -100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+            color: white;
+            font-weight: bold;
+            text-align: center;
+            line-height: 1.2;
+            padding: 0.5rem;
+            box-sizing: border-box;
+            transition: bottom 0.3s ease-out;
+            cursor: pointer;
+        }
+        .mole.up {
+            bottom: 5%;
+        }
+        /* Kelas warna untuk mole dihapus */
+        .hammer-cursor {
+            cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="%23374151" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-hammer"><path d="m15 12-8.5 8.5c-.83.83-2.15 2-3.5 2C4 22 2 20 2 18s1.17-2.67 2-3.5L12 9"/><path d="M17.64 12.36 19 14l1.36-1.36a2 2 0 0 1 2.83 2.83L19 17l1.36 1.36a2 2 0 0 1-2.83 2.83L17 19l-1.36 1.36a2 2 0 0 1-2.83-2.83L15 17l-1.36-1.36a2 2 0 0 1 2.83-2.83z"/></svg>') 16 16, pointer;
+        }
+        .rank-order-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+        .rank-order-item {
+            background-color: #e0e7ff;
+            color: #4f46e5;
+            padding: 0.75rem 1.5rem;
+            border-radius: 0.5rem;
+            font-weight: 600;
+            cursor: grab;
+            transition: all 0.2s ease-in-out;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .rank-order-item:hover {
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+            transform: translateY(-2px);
+        }
+        .rank-order-item.dragging {
+            opacity: 0.5;
+        }
+        .rank-order-item.over {
+            border: 2px dashed #4f46e5;
+        }
+        .drawing-canvas {
+            border: 2px solid #ddd;
+            border-radius: 0.5rem;
+            touch-action: none;
+        }
+        .color-palette button {
+            width: 2rem;
+            height: 2rem;
+            border-radius: 50%;
+            border: 2px solid #fff;
+            transition: transform 0.2s;
+        }
+        .color-palette button.active {
+            border-color: #4f46e5;
+            transform: scale(1.1);
+        }
+        .chat-box {
+            height: 200px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            border-radius: 0.5rem;
+            padding: 1rem;
+            display: flex;
+            flex-direction: column;
+        }
+        .chat-message {
+            padding: 0.5rem;
+            border-radius: 0.5rem;
+            margin-bottom: 0.5rem;
+        }
+        /* Style for Hangman */
+        .key {
+            background-color: #4f46e5;
+            color: white;
+            padding: 10px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 1em;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        .key:disabled {
+            background-color: #a3a3a3;
+            cursor: not-allowed;
+        }
+        #hangman-canvas {
+            border: 2px solid #000;
+            margin: 20px 0;
+            background-color: #e0e7ff;
+            border-radius: 10px;
+        }
+        #hangman-word-display {
+            font-size: 2.5em;
+            margin: 20px 0;
+            letter-spacing: 10px;
+            font-weight: 700;
+            color: #1f2937;
+        }
+    </style>
+</head>
+<body class="flex items-center justify-center min-h-screen p-4">
+    <div id="main-container" class="main-container">
+        <!-- Tampilan Awal untuk Memilih Peran -->
+        <div id="start-screen">
+            <h1 class="text-3xl font-bold text-center mb-4 text-indigo-700">Selamat Datang di Arena Permainan!</h1>
+            <p class="text-center text-gray-600 mb-8">Pilih peran Anda untuk memulai: Pembuat atau Pemain.</p>
+            <div class="flex flex-col sm:flex-row gap-4">
+                <button onclick="showGuruLogin()" class="btn w-full px-6 py-4 bg-indigo-600 text-white rounded-lg font-semibold text-lg shadow-md hover:bg-indigo-700">Saya Pembuat</button>
+                <button onclick="showSiswaLogin()" class="btn w-full px-6 py-4 bg-green-600 text-white rounded-lg font-semibold text-lg shadow-md hover:bg-green-700">Saya Pemain</button>
+            </div>
+        </div>
+
+        <!-- Tampilan Login untuk Pembuat -->
+        <div id="guru-login-screen" class="hidden">
+            <h1 class="text-3xl font-bold text-center mb-4 text-indigo-700">Login Pembuat</h1>
+            <p class="text-center text-gray-600 mb-6">Masukkan username dan PIN untuk mengakses panel.</p>
+            <div class="space-y-4">
+                <input type="text" id="guru-username-input" placeholder="Username" class="w-full p-4 border-2 border-gray-300 rounded-lg text-center text-lg focus:border-indigo-500 focus:ring focus:ring-indigo-200 focus:ring-opacity-50">
+                <input type="password" id="guru-pin-input" placeholder="PIN" class="w-full p-4 border-2 border-gray-300 rounded-lg text-center text-lg focus:border-indigo-500 focus:ring focus:ring-indigo-200 focus:ring-opacity-50">
+                <button onclick="handleGuruLogin()" class="btn w-full px-6 py-4 bg-indigo-600 text-white rounded-lg font-semibold text-lg shadow-md hover:bg-indigo-700">Login</button>
+                <button onclick="backToRoleSelection()" class="btn w-full px-6 py-2 bg-gray-500 text-white rounded-lg font-semibold shadow-md hover:bg-gray-600">Kembali</button>
+            </div>
+        </div>
+
+        <!-- Tampilan untuk Pemain memasukkan Nama dan ID Pembuat -->
+        <div id="siswa-login-screen" class="hidden">
+            <h1 class="text-3xl font-bold text-center mb-4 text-indigo-700">Masuk Sebagai Pemain</h1>
+            <p class="text-center text-gray-600 mb-6">Masukkan nama dan ID dari Pembuat untuk memulai.</p>
+            <div class="space-y-4">
+                <input type="text" id="siswa-nama-input" placeholder="Ketik Nama Anda di sini..." class="w-full p-4 border-2 border-gray-300 rounded-lg text-center text-lg focus:border-indigo-500 focus:ring focus:ring-indigo-200 focus:ring-opacity-50">
+                <input type="text" id="guru-id-input" placeholder="Ketik ID Pembuat di sini..." class="w-full p-4 border-2 border-gray-300 rounded-lg text-center text-lg focus:border-indigo-500 focus:ring focus:ring-indigo-200 focus:ring-opacity-50">
+                <button onclick="startSiswaQuiz()" class="btn w-full px-6 py-4 bg-green-600 text-white rounded-lg font-semibold text-lg shadow-md hover:bg-green-700">Gabung Permainan</button>
+                <button onclick="backToRoleSelection()" class="btn w-full px-6 py-2 bg-gray-500 text-white rounded-lg font-semibold shadow-md hover:bg-gray-600">Kembali</button>
+            </div>
+        </div>
+
+        <!-- Tampilan untuk Pembuat -->
+        <div id="guru-view" class="hidden">
+            <h1 class="text-3xl font-bold text-center mb-4 text-indigo-700">Panel Pembuat</h1>
+            <div class="bg-indigo-100 p-4 rounded-lg text-center mb-6">
+                <p class="font-semibold">ID Sesi Anda:</p>
+                <p id="guru-id" class="text-2xl font-bold my-2 bg-white p-2 rounded-md select-all">Memuat ID...</p>
+            </div>
+
+            <!-- Panel Pembuat Item Permainan -->
+            <div class="mb-6">
+                <h2 class="text-2xl font-semibold mb-3">Buat Item Permainan</h2>
+                <div class="flex justify-center flex-wrap gap-2 mb-4">
+                    <button id="tab-mc" class="tab-btn active" onclick="switchTab('mc')">Pilihan Ganda</button>
+                    <button id="tab-fill-in" class="tab-btn" onclick="switchTab('fill-in')">Isian</button>
+                    <button id="tab-picture-puzzle" class="tab-btn" onclick="switchTab('picture-puzzle')">Puzzle Gambar</button>
+                    <button id="tab-un-jumble" class="tab-btn" onclick="switchTab('un-jumble')">Unjumble</button>
+                    <button id="tab-wordsearch" class="tab-btn" onclick="switchTab('wordsearch')">Wordsearch</button>
+                    <button id="tab-whack-a-mole" class="tab-btn" onclick="switchTab('whack-a-mole')">Whack-a-Mole</button>
+                    <button id="tab-rank-order" class="tab-btn" onclick="switchTab('rank-order')">Urutan Kata</button>
+                    <button id="tab-hangman" class="tab-btn" onclick="switchTab('hangman')">Hangman</button>
+                </div>
+
+                <!-- Form Hangman -->
+                <div id="creator-hangman" class="hidden space-y-3 bg-white p-4 rounded-lg shadow">
+                    <input type="text" id="hangman-word-input" placeholder="Kata dalam Bahasa Inggris (huruf kapital)" class="w-full p-2 border rounded uppercase">
+                    <input type="text" id="hangman-clue-input" placeholder="Petunjuk (Bahasa Indonesia)" class="w-full p-2 border rounded">
+                    <button onclick="addItemToList('hangman')" class="btn w-full px-6 py-2 bg-green-600 text-white rounded-lg font-semibold shadow-md hover:bg-green-700">Tambah Hangman</button>
+                </div>
+
+                <!-- Form Pilihan Ganda -->
+                <div id="creator-mc" class="space-y-3 bg-white p-4 rounded-lg shadow">
+                    <textarea id="question-text" placeholder="Tulis pertanyaan di sini..." class="w-full p-2 border rounded"></textarea>
+                    <input type="text" id="option-a" placeholder="Pilihan A" class="w-full p-2 border rounded"><input type="text" id="option-b" placeholder="Pilihan B" class="w-full p-2 border rounded"><input type="text" id="option-c" placeholder="Pilihan C" class="w-full p-2 border rounded"><input type="text" id="option-d" placeholder="Pilihan D" class="w-full p-2 border rounded">
+                    <select id="correct-answer" class="w-full p-2 border rounded">
+                        <option value="0">Jawaban Benar: A</option><option value="1">Jawaban Benar: B</option><option value="2">Jawaban Benar: C</option><option value="3">Jawaban Benar: D</option>
+                    </select>
+                    <button onclick="addItemToList('mc')" class="btn w-full px-6 py-2 bg-green-600 text-white rounded-lg font-semibold shadow-md hover:bg-green-700">Tambah Pilihan Ganda</button>
+                </div>
+                
+                <!-- Form Isian -->
+                <div id="creator-fill-in" class="hidden space-y-3 bg-white p-4 rounded-lg shadow">
+                    <textarea id="fill-in-clue" placeholder="Tulis petunjuk isian di sini..." class="w-full p-2 border rounded"></textarea>
+                    <input type="text" id="fill-in-answer" placeholder="Jawaban (satu kata/frasa)" class="w-full p-2 border rounded">
+                    <button onclick="addItemToList('fill-in')" class="btn w-full px-6 py-2 bg-green-600 text-white rounded-lg font-semibold shadow-md hover:bg-green-700">Tambah Isian</button>
+                </div>
+
+                <!-- Form Puzzle Gambar -->
+                <div id="creator-picture-puzzle" class="hidden space-y-3 bg-white p-4 rounded-lg shadow">
+                    <input type="text" id="image-url" placeholder="URL Gambar untuk puzzle..." class="w-full p-2 border rounded">
+                    <p class="text-center text-sm text-gray-500">- atau -</p>
+                    <input type="file" id="image-file-input" accept="image/*" class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100">
+                    <select id="grid-size" class="w-full p-2 border rounded">
+                        <option value="3x3">3x3 (Mudah)</option>
+                        <option value="4x4">4x4 (Sedang)</option>
+                        <option value="5x5 (Sulit)"></option>
+                    </select>
+                    <canvas id="creator-puzzle-preview" width="200" height="200" class="mx-auto border rounded"></canvas>
+                    <button onclick="shuffleAndPreview()" class="btn w-full px-6 py-2 bg-yellow-500 text-white rounded-lg font-semibold shadow-md hover:bg-yellow-600">Acak & Pratinjau</button>
+                    <button onclick="addItemToList('picture-puzzle')" class="btn w-full px-6 py-2 bg-green-600 text-white rounded-lg font-semibold shadow-md hover:bg-green-700">Tambah Puzzle Gambar</button>
+                </div>
+
+                <!-- Form Unjumble -->
+                <div id="creator-un-jumble" class="hidden space-y-3 bg-white p-4 rounded-lg shadow">
+                    <textarea id="un-jumble-answer" placeholder="Tulis kata atau kalimat yang benar..." class="w-full p-2 border rounded"></textarea>
+                    <div class="flex items-center space-x-4">
+                        <label class="text-gray-700">Jenis:</label>
+                        <select id="un-jumble-type" class="p-2 border rounded">
+                            <option value="word">Kata</option>
+                            <option value="sentence">Kalimat</option>
+                        </select>
+                    </div>
+                    <button onclick="addItemToList('un-jumble')" class="btn w-full px-6 py-2 bg-green-600 text-white rounded-lg font-semibold shadow-md hover:bg-green-700">Tambah Unjumble</button>
+                </div>
+
+                <!-- Form Wordsearch -->
+                <div id="creator-wordsearch" class="hidden space-y-3 bg-white p-4 rounded-lg shadow">
+                    <textarea id="wordsearch-words" placeholder="Masukkan kata-kata (satu per baris)..." class="w-full p-2 border rounded"></textarea>
+                    <textarea id="wordsearch-clue" placeholder="Tambahkan petunjuk untuk teka-teki ini..." class="w-full p-2 border rounded"></textarea>
+                    <button onclick="addItemToList('wordsearch')" class="btn w-full px-6 py-2 bg-green-600 text-white rounded-lg font-semibold shadow-md hover:bg-green-700">Tambah Wordsearch</button>
+                </div>
+
+                <!-- Form Whack-a-Mole -->
+                <div id="creator-whack-a-mole" class="hidden space-y-3 bg-white p-4 rounded-lg shadow">
+                    <p class="text-sm text-gray-600">Buat pertanyaan untuk permainan Whack-a-Mole.</p>
+                    <textarea id="whack-a-mole-clue" placeholder="Tulis petunjuk/pertanyaan di sini..." class="w-full p-2 border rounded"></textarea>
+                    <input type="text" id="whack-a-mole-correct-answer" placeholder="Jawaban Benar" class="w-full p-2 border rounded">
+                    <p class="text-sm text-gray-600">Masukkan kata/frasa yang salah sebagai distraktor (satu per baris).</p>
+                    <textarea id="whack-a-mole-incorrect-answers" placeholder="Jawaban Salah..." class="w-full p-2 border rounded"></textarea>
+                    <button onclick="addItemToList('whack-a-mole')" class="btn w-full px-6 py-2 bg-green-600 text-white rounded-lg font-semibold shadow-md hover:bg-green-700">Tambah Whack-a-Mole</button>
+                </div>
+
+                <!-- Form Rank Order -->
+                <div id="creator-rank-order" class="hidden space-y-3 bg-white p-4 rounded-lg shadow">
+                    <textarea id="rank-order-clue" placeholder="Tambahkan petunjuk untuk urutan ini..." class="w-full p-2 border rounded"></textarea>
+                    <textarea id="rank-order-items" placeholder="Masukkan item dalam urutan yang benar (satu per baris)..." class="w-full p-2 border rounded"></textarea>
+                    <button onclick="addItemToList('rank-order')" class="btn w-full px-6 py-2 bg-green-600 text-white rounded-lg font-semibold shadow-md hover:bg-green-700">Tambah Urutan Kata</button>
+                </div>
+            </div>
+            
+            <!-- Daftar Item yang Dibuat -->
+            <div id="question-list-container" class="mb-6">
+                <h3 class="text-xl font-semibold mb-2">Daftar Item Permainan (<span id="question-count">0</span>)</h3>
+                <div id="question-list" class="space-y-2 max-h-48 overflow-y-auto p-2 bg-gray-50 rounded"></div>
+                <div class="flex flex-col sm:flex-row gap-2 mt-4">
+                    <button onclick="saveItems()" class="btn w-full sm:w-1/2 px-4 py-2 bg-gray-600 text-white rounded-lg font-semibold shadow-md hover:bg-gray-700">Simpan Soal</button>
+                    <button onclick="loadItems()" class="btn w-full sm:w-1/2 px-4 py-2 bg-gray-600 text-white rounded-lg font-semibold shadow-md hover:bg-gray-700">Muat Soal</button>
+                </div>
+                <input type="file" id="load-file-input" class="hidden" accept=".json">
+                <div class="flex flex-col sm:flex-row gap-2 mt-2">
+                    <button onclick="sendGame()" id="send-quiz-btn" class="btn w-full sm:w-1/2 px-6 py-3 bg-blue-600 text-white rounded-lg font-semibold shadow-md hover:bg-blue-700" disabled>Kirim Permainan ke Pemain</button>
+                    <button onclick="resetGame()" id="reset-game-btn" class="btn w-full sm:w-1/2 px-6 py-3 bg-red-600 text-white rounded-lg font-semibold shadow-md hover:bg-red-700" disabled>Reset Permainan</button>
+                </div>
+            </div>
+
+            <!-- Papan Peringkat Langsung -->
+            <h2 class="text-2xl font-semibold mb-3">Papan Peringkat Langsung</h2>
+            <div id="live-leaderboard-container-guru" class="space-y-3">
+                <p class="text-gray-500 text-center">Belum ada pemain yang bergabung.</p>
+            </div>
+
+            <div class="mt-8 flex justify-center">
+                 <button onclick="downloadAllResults()" id="download-all-results-btn" class="btn px-8 py-3 bg-blue-600 text-white rounded-lg font-semibold text-lg shadow-md hover:bg-blue-700" disabled>Unduh Semua Hasil (PDF)</button>
+            </div>
+        </div>
+
+        <!-- Tampilan untuk Pemain (Permainan) -->
+        <div id="siswa-view" class="hidden"></div>
+    </div>
+
+    <!-- Modal untuk menampilkan hasil detail pemain -->
+    <div id="result-modal" class="modal-overlay hidden">
+        <div class="modal-content w-full lg:w-3/4">
+            <div id="modal-content-body"></div>
+            <div class="mt-6 text-right space-x-3">
+                <button id="download-pdf-btn" class="btn px-6 py-2 bg-blue-600 text-white rounded-lg font-semibold shadow-md hover:bg-blue-700">Unduh PDF</button>
+                <button onclick="closeResultModal()" class="btn px-6 py-2 bg-gray-500 text-white rounded-lg font-semibold shadow-md hover:bg-gray-600">Tutup</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Pesan Kustom -->
+    <div id="message-modal" class="modal-overlay hidden">
+        <div class="bg-white p-6 rounded-lg shadow-xl text-center">
+            <p id="modal-message" class="text-lg font-semibold mb-4 text-gray-700"></p>
+            <button onclick="closeMessageModal()" class="btn px-6 py-2 bg-indigo-600 text-white rounded-lg font-semibold shadow-md hover:bg-indigo-700">OK</button>
+        </div>
+    </div>
+
+    <!-- Modal Konfirmasi Kustom -->
+    <div id="confirmation-modal" class="modal-overlay hidden">
+        <div class="bg-white p-6 rounded-lg shadow-xl text-center max-w-sm w-full">
+            <p id="confirmation-message" class="text-lg font-semibold mb-6 text-gray-700"></p>
+            <div class="flex justify-around">
+                <button id="confirm-yes-btn" class="btn px-6 py-2 bg-red-600 text-white rounded-lg font-semibold shadow-md hover:bg-red-700">Ya</button>
+                <button id="confirm-no-btn" class="btn px-6 py-2 bg-gray-500 text-white rounded-lg font-semibold shadow-md hover:bg-gray-600">Tidak</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- State & Elemen Global ---
+        let peer = null, guruId = null, siswaNama = '', connections = {}, studentData = {}, createdItems = [], currentShuffledOrder = null, currentPuzzleImageSource = null;
+        const startScreen = document.getElementById('start-screen'), guruLoginScreen = document.getElementById('guru-login-screen'), siswaLoginScreen = document.getElementById('siswa-login-screen'), guruView = document.getElementById('guru-view'), siswaView = document.getElementById('siswa-view'), guruIdEl = document.getElementById('guru-id'), liveLeaderboardContainerGuru = document.getElementById('live-leaderboard-container-guru'), resultModal = document.getElementById('result-modal'), modalContentBody = document.getElementById('modal-content-body'), downloadPdfBtn = document.getElementById('download-pdf-btn'), resetGameBtn = document.getElementById('reset-game-btn'), sendQuizBtn = document.getElementById('send-quiz-btn'), downloadAllResultsBtn = document.getElementById('download-all-results-btn');
+
+        // --- Fungsi Modal Kustom ---
+        function showMessageModal(message) {
+            document.getElementById('modal-message').textContent = message;
+            document.getElementById('message-modal').classList.remove('hidden');
+        }
+        function closeMessageModal() {
+            document.getElementById('message-modal').classList.add('hidden');
+        }
+
+        function showConfirmationModal(message, onConfirm) {
+            const confirmationModal = document.getElementById('confirmation-modal');
+            document.getElementById('confirmation-message').textContent = message;
+            
+            const yesBtn = document.getElementById('confirm-yes-btn');
+            const noBtn = document.getElementById('confirm-no-btn');
+
+            yesBtn.onclick = () => {
+                onConfirm(true);
+                confirmationModal.classList.add('hidden');
+            };
+            
+            noBtn.onclick = () => {
+                onConfirm(false);
+                confirmationModal.classList.add('hidden');
+            };
+            
+            confirmationModal.classList.remove('hidden');
+        }
+
+        // --- Fungsi Inisialisasi Peran ---
+        function showGuruLogin() { startScreen.classList.add('hidden'); guruLoginScreen.classList.remove('hidden'); }
+        function handleGuruLogin() {
+            if (document.getElementById('guru-username-input').value === 'adminoke' && document.getElementById('guru-pin-input').value === '12345') {
+                guruLoginScreen.classList.add('hidden'); initGuru();
+            } else { showMessageModal('Username atau PIN salah!'); }
+        }
+        function initGuru() {
+            guruView.classList.remove('hidden'); peer = new Peer();
+            peer.on('open', id => { guruIdEl.textContent = id; });
+            peer.on('connection', conn => {
+                conn.on('data', data => {
+                    if (data.type === 'register') {
+                        connections[conn.peer] = conn;
+                        studentData[conn.peer] = { id: conn.peer, name: data.name, score: 0, progress: 0, answers: [], gameData: [], completionTime: null };
+                        updateLeaderboard();
+                        resetGameBtn.disabled = false;
+                    } else if (data.type === 'updateProgress') {
+                        const student = studentData[conn.peer];
+                        if (student) {
+                            student.answers.push(data.payload.lastAnswer); student.progress = data.payload.progress;
+                            if (data.payload.lastAnswer.isCorrect) {
+                                const points = data.payload.lastAnswer.points || 1;
+                                student.score += points;
+                            }
+                            // Memperbarui total waktu jika ada
+                            if (data.payload.lastAnswer.totalTime !== undefined) {
+                                student.answers[student.answers.length - 1].totalTime = data.payload.lastAnswer.totalTime;
+                            }
+                            updateLeaderboard();
+                        }
+                    } else if (data.type === 'finishGame') {
+                        const student = studentData[conn.peer];
+                        if (student) {
+                            student.completionTime = data.payload.completionTime;
+                            updateLeaderboard();
+                        }
+                    }
+                });
+            });
+            peer.on('disconnected', () => {
+                // Nonaktifkan tombol reset jika tidak ada pemain yang terhubung
+                if (Object.keys(connections).length === 0) {
+                    resetGameBtn.disabled = true;
+                    downloadAllResultsBtn.disabled = true;
+                }
+            });
+            document.getElementById('load-file-input').addEventListener('change', handleFileLoad);
+        }
+        function showSiswaLogin() { startScreen.classList.add('hidden'); siswaLoginScreen.classList.remove('hidden'); }
+        function startSiswaQuiz() {
+            const inputNama = document.getElementById('siswa-nama-input').value, inputId = document.getElementById('guru-id-input').value;
+            if (inputNama.trim() && inputId.trim()) {
+                siswaNama = inputNama.trim(); guruId = inputId.trim();
+                siswaLoginScreen.classList.add('hidden'); siswaView.classList.remove('hidden');
+                siswaView.innerHTML = `<p class="text-xl text-center text-gray-600 p-8">Menunggu permainan dari pembuat...</p>`;
+                peer = new Peer();
+                peer.on('open', id => {
+                    const conn = peer.connect(guruId);
+                    conn.on('open', () => {
+                        conn.send({ type: 'register', name: siswaNama });
+                        conn.on('data', data => {
+                            if (data.type === 'startGame') {
+                                // Inisialisasi properti khusus game saat memulai
+                                data.payload.forEach(item => {
+                                    if (item.type !== 'gartic') {
+                                        item.totalTime = 0;
+                                    }
+                                });
+                                launchGame(data.payload, conn);
+                            } else if (data.type === 'resetGame') {
+                                // Tangani pesan reset game
+                                siswaView.innerHTML = `<p class="text-xl text-center text-gray-600 p-8">Permainan telah direset oleh Pembuat. Menunggu permainan baru...</p>`;
+                                showMessageModal('Permainan telah direset.');
+                            } else if (data.type === 'kickPlayer') {
+                                siswaView.innerHTML = `<p class="text-xl text-center text-red-600 font-bold p-8">Anda telah dikeluarkan dari permainan.</p>`;
+                                peer.destroy();
+                            }
+                        });
+                    });
+                });
+            } else { showMessageModal("Nama Pemain dan ID Pembuat tidak boleh kosong."); }
+        }
+        function backToRoleSelection() { guruLoginScreen.classList.add('hidden'); siswaLoginScreen.classList.add('hidden'); startScreen.classList.remove('hidden'); }
+
+        // --- Fungsi Pembuat ---
+        function switchTab(tabName) {
+            ['mc', 'fill-in', 'picture-puzzle', 'un-jumble', 'wordsearch', 'whack-a-mole', 'rank-order', 'hangman'].forEach(name => {
+                document.getElementById(`creator-${name}`).classList.toggle('hidden', name !== tabName);
+                document.getElementById(`tab-${name}`).classList.toggle('active', name === tabName);
+            });
+        }
+        
+        function resendGameToPlayer(playerId) {
+            const conn = connections[playerId];
+            if (conn && conn.open) {
+                if (createdItems.length === 0) {
+                    showMessageModal("Tidak ada soal yang dibuat untuk dikirim ulang.");
+                    return;
+                }
+                conn.send({ type: 'startGame', payload: createdItems });
+                showMessageModal(`Permainan berhasil dikirim ulang ke pemain ${studentData[playerId].name}.`);
+            } else {
+                showMessageModal("Pemain tidak terhubung atau koneksi terputus.");
+            }
+        }
+
+        function addItemToList(type) {
+            let itemPayload = { type };
+            if (type === 'mc') {
+                itemPayload.question = document.getElementById('question-text').value;
+                itemPayload.options = Array.from({length: 4}, (_, i) => document.getElementById(`option-${'abcd'[i]}`).value);
+                itemPayload.answer = parseInt(document.getElementById('correct-answer').value);
+                if (!itemPayload.question || itemPayload.options.some(opt => !opt)) return showMessageModal("Isi semua kolom soal dan pilihan.");
+                document.getElementById('question-text').value = ''; ['a', 'b', 'c', 'd'].forEach(o => document.getElementById(`option-${o}`).value = '');
+            } else if (type === 'fill-in') {
+                itemPayload.clue = document.getElementById('fill-in-clue').value; itemPayload.answer = document.getElementById('fill-in-answer').value;
+                if (!itemPayload.clue || !itemPayload.answer) return showMessageModal("Isi kolom petunjuk dan jawaban.");
+                document.getElementById('fill-in-clue').value = ''; document.getElementById('fill-in-answer').value = '';
+            } else if (type === 'picture-puzzle') {
+                if (!currentShuffledOrder || !currentPuzzleImageSource) return showMessageModal("Harap pilih gambar dan acak terlebih dahulu.");
+                itemPayload.imageUrl = currentPuzzleImageSource;
+                itemPayload.gridSize = document.getElementById('grid-size').value;
+                itemPayload.shuffledOrder = currentShuffledOrder;
+                document.getElementById('image-url').value = '';
+                document.getElementById('image-file-input').value = '';
+                const previewCtx = document.getElementById('creator-puzzle-preview').getContext('2d');
+                previewCtx.clearRect(0, 0, 200, 200);
+                currentShuffledOrder = null;
+                currentPuzzleImageSource = null;
+            } else if (type === 'un-jumble') {
+                const answer = document.getElementById('un-jumble-answer').value;
+                const unjumbleType = document.getElementById('un-jumble-type').value;
+                if (!answer.trim()) return showMessageModal("Isi kata atau kalimat yang benar.");
+                itemPayload.answer = answer.trim();
+                itemPayload.unjumbleType = unjumbleType;
+                itemPayload.scrambled = scrambleString(itemPayload.answer, unjumbleType);
+                document.getElementById('un-jumble-answer').value = '';
+            } else if (type === 'wordsearch') {
+                const wordsInput = document.getElementById('wordsearch-words').value;
+                const words = wordsInput.split('\n').map(w => w.trim().toUpperCase()).filter(w => w.length > 0 && w.length <= 20);
+                const clue = document.getElementById('wordsearch-clue').value.trim();
+
+                if (words.length === 0) return showMessageModal("Masukkan setidaknya satu kata untuk teka-teki.");
+                
+                const gridData = generateWordsearchGrid(words);
+                if (!gridData) {
+                    return showMessageModal("Gagal membuat teka-teki. Coba kata yang lebih sedikit atau lebih pendek.");
+                }
+
+                itemPayload.words = gridData.placedWords.sort();
+                itemPayload.grid = gridData.grid;
+                itemPayload.clue = clue;
+
+                document.getElementById('wordsearch-words').value = '';
+                document.getElementById('wordsearch-clue').value = '';
+            } else if (type === 'whack-a-mole') {
+                const clue = document.getElementById('whack-a-mole-clue').value.trim();
+                const correctAnswer = document.getElementById('whack-a-mole-correct-answer').value.trim();
+                const incorrectAnswers = document.getElementById('whack-a-mole-incorrect-answers').value.split('\n').map(m => m.trim()).filter(m => m.length > 0);
+                
+                if (!clue || !correctAnswer || incorrectAnswers.length === 0) {
+                    return showMessageModal("Harap isi semua kolom untuk Whack-a-Mole.");
+                }
+                itemPayload.clue = clue;
+                itemPayload.correctAnswer = correctAnswer;
+                itemPayload.incorrectAnswers = incorrectAnswers;
+                
+                document.getElementById('whack-a-mole-clue').value = '';
+                document.getElementById('whack-a-mole-correct-answer').value = '';
+                document.getElementById('whack-a-mole-incorrect-answers').value = '';
+            } else if (type === 'rank-order') {
+                const clue = document.getElementById('rank-order-clue').value.trim();
+                const items = document.getElementById('rank-order-items').value.split('\n').map(i => i.trim()).filter(i => i.length > 0);
+                if (items.length < 2) {
+                    return showMessageModal("Harap masukkan setidaknya dua item untuk diurutkan.");
+                }
+                itemPayload.clue = clue;
+                itemPayload.items = items;
+                itemPayload.scrambledItems = [...items].sort(() => Math.random() - 0.5); // Simpan urutan acak awal
+                itemPayload.totalTime = 0; // Inisialisasi total waktu
+                document.getElementById('rank-order-clue').value = '';
+                document.getElementById('rank-order-items').value = '';
+            } else if (type === 'hangman') {
+                const word = document.getElementById('hangman-word-input').value.trim().toUpperCase();
+                const clue = document.getElementById('hangman-clue-input').value.trim();
+                if (!word || !clue) return showMessageModal("Harap isi kata dan petunjuk.");
+                itemPayload.word = word;
+                itemPayload.clue = clue;
+                document.getElementById('hangman-word-input').value = '';
+                document.getElementById('hangman-clue-input').value = '';
+            }
+            createdItems.push(itemPayload); renderItemList();
+        }
+
+        function kickPlayer(playerId) {
+            showConfirmationModal('Apakah Anda yakin ingin mengeluarkan pemain ini?', (isConfirmed) => {
+                if (isConfirmed) {
+                    const conn = connections[playerId];
+                    if (conn && conn.open) {
+                        // Kirim pesan ke pemain bahwa mereka dikeluarkan
+                        conn.send({ type: 'kickPlayer' });
+                        // Tutup koneksi
+                        conn.close();
+                    }
+
+                    // Hapus data pemain dari sisi Pembuat
+                    delete connections[playerId];
+                    delete studentData[playerId];
+
+                    // Perbarui UI
+                    updateLeaderboard();
+                    renderItemList(); // Memperbarui status tombol
+                    showMessageModal('Pemain berhasil dikeluarkan.');
+                }
+            });
+        }
+
+        // Fungsi untuk membuat grid Wordsearch
+        function generateWordsearchGrid(words) {
+            const gridSize = 20;
+            const grid = Array.from({ length: gridSize }, () => Array(gridSize).fill(null));
+            const directions = [
+                { dx: 1, dy: 0 }, { dx: -1, dy: 0 }, // Horizontal
+                { dx: 0, dy: 1 }, { dx: 0, dy: -1 }, // Vertical
+                { dx: 1, dy: 1 }, { dx: 1, dy: -1 }, // Diagonal
+                { dx: -1, dy: 1 }, { dx: -1, dy: -1 }
+            ];
+            
+            let placedWords = [];
+            const sortedWords = words.sort((a, b) => b.length - a.length);
+
+            for (const word of sortedWords) {
+                let attempts = 0;
+                let isPlaced = false;
+                while (attempts < 50 && !isPlaced) {
+                    const dir = directions[Math.floor(Math.random() * directions.length)];
+                    const startX = Math.floor(Math.random() * gridSize);
+                    const startY = Math.floor(Math.random() * gridSize);
+
+                    let canPlace = true;
+                    let tempGrid = JSON.parse(JSON.stringify(grid));
+                    
+                    for (let i = 0; i < word.length; i++) {
+                        const newX = startX + i * dir.dx;
+                        const newY = startY + i * dir.dy;
+
+                        if (newX < 0 || newX >= gridSize || newY < 0 || newY >= gridSize) {
+                            canPlace = false;
+                            break;
+                        }
+                        if (tempGrid[newY][newX] !== null && tempGrid[newY][newX] !== word[i]) {
+                            canPlace = false;
+                            break;
+                        }
+                        tempGrid[newY][newX] = word[i];
+                    }
+
+                    if (canPlace) {
+                        for (let i = 0; i < word.length; i++) {
+                            const newX = startX + i * dir.dx;
+                            const newY = startY + i * dir.dy;
+                            grid[newY][newX] = word[i];
+                        }
+                        placedWords.push(word);
+                        isPlaced = true;
+                    }
+                    attempts++;
+                }
+            }
+
+            // Isi sisa grid dengan huruf acak
+            const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+            for (let y = 0; y < gridSize; y++) {
+                for (let x = 0; x < gridSize; x++) {
+                    if (grid[y][x] === null) {
+                        grid[y][x] = alphabet.charAt(Math.floor(Math.random() * alphabet.length));
+                    }
+                }
+            }
+            
+            return { grid, placedWords };
+        }
+
+        function scrambleString(str, type) {
+            function shuffle(array) {
+                for (let i = array.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [array[i], array[j]] = [array[j], array[i]];
+                }
+                return array;
+            }
+            if (type === 'word') {
+                return shuffle(str.split('')).join('');
+            } else if (type === 'sentence') {
+                return shuffle(str.split(' ')).join(' ');
+            }
+            return str;
+        }
+
+        function shuffleAndPreview() {
+            const file = document.getElementById('image-file-input').files[0];
+            const url = document.getElementById('image-url').value;
+            
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = e => {
+                    currentPuzzleImageSource = e.target.result;
+                    runPreview(e.target.result);
+                };
+                reader.readAsDataURL(file);
+            } else if (url) {
+                currentPuzzleImageSource = url;
+                runPreview(url);
+            } else {
+                return showMessageModal('Pilih file gambar atau masukkan URL terlebih dahulu.');
+            }
+        }
+        function runPreview(imageSrc) {
+            const gridSize = document.getElementById('grid-size').value;
+            const canvas = document.getElementById('creator-puzzle-preview');
+            const ctx = canvas.getContext('2d');
+            const [cols, rows] = gridSize.split('x').map(Number);
+            const img = new Image();
+            img.crossOrigin = "Anonymous";
+
+            if (imageSrc.startsWith('data:')) {
+                img.src = imageSrc;
+            } else {
+                img.src = `https://proxy.cors.sh/${imageSrc}`;
+            }
+
+            img.onload = () => {
+                const pieceWidth = canvas.width / cols;
+                const pieceHeight = canvas.height / rows;
+                let positions = [];
+                for (let y = 0; y < rows; y++) {
+                    for (let x = 0; x < cols; x++) {
+                        positions.push({ dx: x, dy: y });
+                    }
+                }
+                positions.sort(() => 0.5 - Math.random());
+                currentShuffledOrder = positions;
+
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                for (let i = 0; i < positions.length; i++) {
+                    const sx = i % cols;
+                    const sy = Math.floor(i / cols);
+                    const pos = positions[i];
+                    ctx.drawImage(img, sx * (img.width / cols), sy * (img.height / rows), img.width / cols, img.height / rows, pos.dx * pieceWidth, pos.dy * pieceHeight, pieceWidth, pieceHeight);
+                    ctx.strokeRect(pos.dx * pieceWidth, pos.dy * pieceHeight, pieceWidth, pieceHeight);
+                }
+            };
+            img.onerror = () => {
+                ctx.fillStyle = 'red';
+                ctx.font = '12px Poppins';
+                ctx.fillText('Gagal memuat gambar.', 10, 20);
+                currentPuzzleImageSource = null;
+            };
+        }
+        function renderItemList() {
+            const listEl = document.getElementById('question-list'), countEl = document.getElementById('question-count');
+            listEl.innerHTML = '';
+            createdItems.forEach((item, index) => {
+                const div = document.createElement('div');
+                div.className = 'bg-gray-100 p-2 rounded text-sm flex justify-between items-center';
+                let typeText, contentText;
+                if (item.type === 'mc') { typeText = 'PG'; contentText = item.question; }
+                else if (item.type === 'fill-in') { typeText = 'Isian'; contentText = item.clue; }
+                else if (item.type === 'picture-puzzle') { typeText = 'Puzzle Gambar'; contentText = 'Gambar Kustom'; }
+                else if (item.type === 'un-jumble') { typeText = 'Unjumble'; contentText = item.answer; }
+                else if (item.type === 'wordsearch') { typeText = 'Wordsearch'; contentText = item.clue || item.words.join(', '); }
+                else if (item.type === 'whack-a-mole') { typeText = 'Whack-a-Mole'; contentText = `Clue: ${item.clue}`; }
+                else if (item.type === 'rank-order') { typeText = 'Urutan Kata'; contentText = item.clue ? `Clue: ${item.clue}` : item.items.join(', '); }
+                else if (item.type === 'hangman') { typeText = 'Hangman'; contentText = `${item.word} (${item.clue})`; }
+                
+                div.innerHTML = `
+                    <div>
+                        <span class="font-bold text-indigo-600">[${typeText}]</span> 
+                        ${index + 1}. ${contentText.substring(0, 30)}...
+                    </div>
+                    <button onclick="deleteItem(${index})" class="px-2 py-1 bg-red-500 text-white text-xs rounded hover:bg-red-600">Hapus</button>
+                `;
+                listEl.appendChild(div);
+            });
+            countEl.textContent = createdItems.length; 
+            // Aktifkan tombol 'Kirim Permainan' jika ada item
+            sendQuizBtn.disabled = createdItems.length === 0;
+            // Nonaktifkan tombol 'Reset Permainan' jika tidak ada pemain yang terhubung
+            resetGameBtn.disabled = Object.keys(connections).length === 0;
+            // Aktifkan tombol 'Unduh Semua Hasil' jika ada pemain yang telah mengirimkan jawaban
+            downloadAllResultsBtn.disabled = Object.values(studentData).every(s => s.answers.length === 0);
+        }
+        function deleteItem(index) {
+            createdItems.splice(index, 1);
+            renderItemList();
+        }
+        function saveItems() {
+            if (createdItems.length === 0) return showMessageModal("Tidak ada soal untuk disimpan.");
+            const dataStr = JSON.stringify(createdItems, null, 2);
+            const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
+            const exportFileDefaultName = 'permainan.json';
+            let linkElement = document.createElement('a');
+            linkElement.setAttribute('href', dataUri);
+            linkElement.setAttribute('download', exportFileDefaultName);
+            linkElement.click();
+        }
+        function loadItems() {
+            document.getElementById('load-file-input').click();
+        }
+        function handleFileLoad(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const loadedItems = JSON.parse(e.target.result);
+                    if (Array.isArray(loadedItems)) {
+                        createdItems = loadedItems;
+                        renderItemList();
+                        showMessageModal(`${loadedItems.length} soal berhasil dimuat!`);
+                    } else {
+                        throw new Error("Format file tidak valid.");
+                    }
+                } catch (error) {
+                    showMessageModal(`Gagal memuat file: ${error.message}`);
+                }
+            };
+            reader.readAsText(file);
+            event.target.value = ''; // Reset input
+        }
+        function sendGame() {
+            if (createdItems.length === 0) return showMessageModal("Buat setidaknya satu item permainan.");
+            for (const peerId in studentData) studentData[peerId].gameData = createdItems;
+            for (const peerId in connections) connections[peerId].send({ type: 'startGame', payload: createdItems });
+            showMessageModal(`Permainan dengan ${createdItems.length} item berhasil dikirim!`);
+        }
+        function resetGame() {
+            showConfirmationModal('Apakah Anda yakin ingin mereset permainan untuk semua pemain? Ini akan menghapus semua progres dan skor.', (isConfirmed) => {
+                if (isConfirmed) {
+                    // Kirim pesan reset ke semua Pemain
+                    for (const peerId in connections) {
+                        if (connections[peerId] && connections[peerId].open) {
+                            connections[peerId].send({ type: 'resetGame' });
+                        }
+                    }
+                    
+                    // Reset state Pembuat
+                    studentData = {};
+                    // createdItems tidak perlu direset agar Pembuat bisa memulai ulang permainan yang sama
+                    updateLeaderboard();
+                    renderItemList();
+                    
+                    // Nonaktifkan tombol kirim dan reset
+                    sendQuizBtn.disabled = true;
+                    resetGameBtn.disabled = true;
+                    downloadAllResultsBtn.disabled = true;
+
+                    showMessageModal('Semua permainan Pemain telah direset.');
+                }
+            });
+        }
+
+        function downloadAllResults() {
+            if (Object.values(studentData).every(s => s.answers.length === 0)) {
+                return showMessageModal("Tidak ada hasil pemain yang dapat diunduh.");
+            }
+
+            const tempContainer = document.createElement('div');
+            tempContainer.id = 'temp-pdf-container';
+            tempContainer.style.padding = '20px';
+            tempContainer.style.backgroundColor = '#fff';
+            tempContainer.style.width = '210mm'; // Ukuran A4
+            tempContainer.style.minHeight = '297mm';
+            tempContainer.style.boxSizing = 'border-box';
+            document.body.appendChild(tempContainer);
+
+            Object.values(studentData).forEach((data, index) => {
+                if (data.answers.length > 0) {
+                    const reportSection = document.createElement('div');
+                    reportSection.innerHTML = `
+                        <div style="page-break-after: always;">
+                            <div class="text-center bg-gray-100 p-6 rounded-lg mb-4">
+                                <h2 class="text-2xl font-bold text-gray-800">Laporan Hasil Permainan</h2>
+                                <h3 class="text-xl font-semibold">${data.name}</h3>
+                                <p class="text-lg font-semibold mt-2">Skor Akhir: <span class="text-2xl font-bold text-green-600">${data.score}</span></p>
+                            </div>
+                            <div class="space-y-4">
+                                ${data.answers.map((item, itemIndex) => {
+                                    const isCorrect = item.isCorrect;
+                                    const answerHTML = isCorrect ? `<p class="mt-2 text-green-700 font-semibold">Jawaban: ${item.userAnswer} (Benar)</p>` : `<p class="mt-2 text-red-700 font-semibold">Jawabanmu: ${item.userAnswer} (Salah)</p><p class="mt-1 text-blue-700 font-semibold">Jawaban Benar: ${item.correctAnswer}</p>`;
+                                    const timeHTML = (item.totalTime !== undefined) ? `<p class="mt-1 text-sm text-gray-500">Waktu yang dihabiskan: ${formatTime(item.totalTime)}</p>` : '';
+                                    return `
+                                        <div class="p-4 rounded-lg border-l-4 ${isCorrect ? 'border-green-500 bg-green-50' : 'border-red-500 bg-red-50'}">
+                                            <p class="font-bold">${itemIndex + 1}. ${item.question}</p>
+                                            ${answerHTML}
+                                            ${timeHTML}
+                                        </div>
+                                    `;
+                                }).join('')}
+                            </div>
+                        </div>
+                    `;
+                    tempContainer.appendChild(reportSection);
+                }
+            });
+
+            html2canvas(tempContainer, { scale: 2, useCORS: true }).then(canvas => {
+                const { jsPDF } = window.jspdf;
+                const imgData = canvas.toDataURL('image/png');
+                const pdf = new jsPDF('p', 'mm', 'a4');
+                const pdfWidth = pdf.internal.pageSize.getWidth();
+                const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+                pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+                pdf.save(`Laporan Semua Hasil Permainan.pdf`);
+
+                document.body.removeChild(tempContainer);
+            });
+        }
+
+        function updateLeaderboard() {
+            const hasResults = Object.values(studentData).some(s => s.answers.length > 0);
+            if (Object.keys(connections).length === 0) { 
+                liveLeaderboardContainerGuru.innerHTML = '<p class="text-gray-500 text-center">Belum ada pemain yang bergabung.</p>'; 
+                resetGameBtn.disabled = true;
+                downloadAllResultsBtn.disabled = true;
+                return;
+            }
+            downloadAllResultsBtn.disabled = !hasResults;
+            resetGameBtn.disabled = false;
+
+            const sortedStudents = Object.values(studentData).sort((a, b) => {
+                if (b.score !== a.score) return b.score - a.score;
+                const aFinished = a.completionTime !== null;
+                const bFinished = b.completionTime !== null;
+                if (aFinished && !bFinished) return -1;
+                if (!aFinished && bFinished) return 1;
+                if (aFinished && bFinished) return a.completionTime - b.completionTime;
+                return b.progress - a.progress;
+            });
+            renderLeaderboard(liveLeaderboardContainerGuru, sortedStudents);
+        }
+
+        function formatTime(ms) {
+            if (ms === null) return '';
+            const minutes = Math.floor(ms / 60000);
+            const seconds = ((ms % 60000) / 1000).toFixed(2);
+            return `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
+        }
+        function renderLeaderboard(container, sortedData) {
+            container.innerHTML = '';
+            sortedData.forEach((data, index) => {
+                const resultEntry = document.createElement('div');
+                resultEntry.className = 'leaderboard-entry bg-white p-4 rounded-lg shadow-md flex justify-between items-center';
+                
+                let statusHTML;
+                if (data.completionTime !== null) {
+                    statusHTML = `<p class="text-sm font-bold text-blue-600">Waktu: ${formatTime(data.completionTime)}</p>`;
+                } else {
+                    const progressText = data.gameData.length > 0 ? `${data.progress} / ${data.gameData.length}` : '0 / 0';
+                    statusHTML = `<p class="text-sm text-gray-600">Progres: ${progressText}</p>`;
+                }
+                
+                let detailedTime = '';
+                const lastAnswer = data.answers[data.answers.length - 1];
+                if (lastAnswer && lastAnswer.totalTime !== undefined) {
+                    detailedTime = `<p class="mt-1 text-xs text-gray-400">Total Waktu: ${formatTime(lastAnswer.totalTime)}</p>`;
+                }
+
+                const detailButton = container.id === 'live-leaderboard-container-guru' ? `<button onclick="showResultModal(studentData['${data.id}'])" class="btn px-3 py-1 bg-indigo-500 text-white text-xs rounded-md font-semibold mt-1" ${data.answers.length === 0 ? 'disabled' : ''}>Detail</button>` : '';
+                const kickButton = container.id === 'live-leaderboard-container-guru' ? `<button onclick="kickPlayer('${data.id}')" class="btn px-3 py-1 bg-red-600 text-white text-xs rounded-md font-semibold mt-1 ml-2">Tendang</button>` : '';
+                const resendButton = container.id === 'live-leaderboard-container-guru' ? `<button onclick="resendGameToPlayer('${data.id}')" class="btn px-3 py-1 bg-green-600 text-white text-xs rounded-md font-semibold mt-1 ml-2" ${!connections[data.id] || connections[data.id].open === false ? 'disabled' : ''}>Kirim Ulang</button>` : '';
+
+                resultEntry.innerHTML = `<div class="flex items-center gap-4"><span class="text-xl font-bold text-indigo-600 w-8 text-center">${index + 1}</span><div><p class="font-bold text-lg">${data.name} ${data.id === (peer ? peer.id : '') ? '(Anda)' : ''}</p>${statusHTML}${detailedTime}</div></div><div class="text-right flex items-center">${detailButton}${kickButton}${resendButton}<p class="font-bold text-2xl text-green-600 ml-4">${data.score}</p></div>`;
+                container.appendChild(resultEntry);
+            });
+        }
+
+        // --- Fungsi Pemain ---
+        function launchGame(gameData, conn) {
+            let currentPage = 0;
+            const startTime = Date.now();
+            let itemStartTime = 0;
+
+            siswaView.innerHTML = `<div id="game-area-player" class="w-full"></div>`;
+            
+            function renderCurrentItem() {
+                if (currentPage >= gameData.length) { finishGame(); return; }
+                
+                const item = gameData[currentPage], gameArea = document.getElementById('game-area-player');
+                itemStartTime = Date.now(); // Mulai waktu untuk item saat ini
+
+                let contentHTML = `<p class="text-center text-gray-600 mb-4">Item ${currentPage + 1} dari ${gameData.length}</p>`;
+                
+                if (item.type === 'mc') {
+                    contentHTML += `<div class="mb-6"><p class="text-xl font-semibold text-center">${item.question}</p></div><div class="space-y-3">${item.options.map((option, index) => `<button class="btn block w-full text-left p-4 rounded-lg font-medium border-2 border-gray-300 hover:bg-gray-100" onclick="window.submitAnswer(${index})">${option}</button>`).join('')}</div>`;
+                } else if (item.type === 'fill-in') {
+                    contentHTML += `<div class="mb-6"><p class="text-xl font-semibold text-center">${item.clue}</p></div><div class="space-y-3 mt-6"><input type="text" id="player-answer-input" placeholder="Ketik jawabanmu..." class="w-full p-4 border-2 border-gray-300 rounded-lg text-center text-lg"><button class="btn w-full px-6 py-3 bg-indigo-600 text-white rounded-lg font-semibold" onclick="window.submitAnswer()">Kirim</button></div>`;
+                } else if (item.type === 'picture-puzzle') {
+                    contentHTML += `
+                        <div class="flex flex-col items-center">
+                            <p class="mb-2 font-semibold">Susun potongan gambar berikut!</p>
+                            <canvas id="puzzle-canvas" width="400" height="400" class="border rounded-lg shadow-md"></canvas>
+                            <p id="puzzle-feedback" class="text-red-600 font-bold mt-2 h-6"></p>
+                            <button id="submit-puzzle-btn" class="btn mt-2 px-8 py-3 bg-indigo-600 text-white rounded-lg font-semibold">Kirim Jawaban</button>
+                        </div>
+                    `;
+                } else if (item.type === 'un-jumble') {
+                    const pieces = item.scrambled.split(item.unjumbleType === 'word' ? '' : ' ');
+                    const isWord = item.unjumbleType === 'word';
+                    contentHTML += `
+                        <div class="flex flex-col items-center">
+                            <p class="mb-4 font-semibold text-lg text-center">Susun kata${isWord ? '' : ' atau kalimat'} berikut:</p>
+                            <div id="un-jumble-container" class="flex flex-wrap justify-center gap-2 mb-4 p-4 border border-dashed rounded-lg bg-gray-50">
+                                ${pieces.map((piece, index) => `<span class="un-jumble-piece px-4 py-2 border rounded-full cursor-pointer bg-white shadow-sm hover:bg-gray-100" data-index="${index}">${piece}</span>`).join('')}
+                            </div>
+                            <p class="font-semibold text-lg mb-2">Jawaban Anda:</p>
+                            <div id="un-jumble-answer-display" class="w-full min-h-[50px] p-2 border-2 border-indigo-300 rounded-lg text-center flex flex-wrap gap-2 items-center justify-center"></div>
+                            <div class="flex gap-2 mt-4">
+                                <button id="submit-un-jumble" class="btn px-6 py-3 bg-indigo-600 text-white rounded-lg font-semibold">Kirim</button>
+                                <button id="reset-un-jumble" class="btn px-6 py-3 bg-gray-500 text-white rounded-lg font-semibold">Reset</button>
+                            </div>
+                        </div>`;
+                } else if (item.type === 'wordsearch') {
+                    contentHTML += `
+                        <div class="flex flex-col items-center">
+                            <h3 class="text-2xl font-bold mb-4">Cari Kata</h3>
+                            ${item.clue ? `<p class="text-sm text-gray-600 mb-2">Petunjuk: ${item.clue}</p>` : ''}
+                            <p class="text-center text-gray-600 mb-4">Temukan semua kata di bawah ini dalam grid!</p>
+                            <div id="wordsearch-grid" class="wordsearch-grid w-full max-w-xl"></div>
+                            <p id="wordsearch-status" class="mt-4 text-lg font-semibold text-green-600 h-8"></p>
+                            <ul id="wordsearch-list" class="wordsearch-list">
+                                ${item.words.map(word => `<li class="wordsearch-word" data-word="${word}">${word}</li>`).join('')}
+                            </ul>
+                        </div>
+                    `;
+                } else if (item.type === 'whack-a-mole') {
+                    contentHTML += `
+                        <div class="flex flex-col items-center text-center">
+                            <h3 class="text-2xl font-bold mb-4">Whack-a-Mole</h3>
+                            <p id="whack-a-mole-clue" class="text-lg font-semibold mb-4 text-indigo-700">${item.clue}</p>
+                            <div id="whack-a-mole-grid"></div>
+                            <div class="mt-4 flex flex-col items-center">
+                                <p class="text-xl font-semibold">Skor: <span id="whack-a-mole-score">0</span></p>
+                            </div>
+                        </div>
+                    `;
+                } else if (item.type === 'rank-order') {
+                    // Gunakan urutan acak yang disimpan
+                    const scrambledItems = item.scrambledItems;
+                    contentHTML += `
+                        <div class="flex flex-col items-center text-center">
+                            <h3 class="text-2xl font-bold mb-4">Urutan Kata</h3>
+                            ${item.clue ? `<p class="text-lg text-gray-600 mb-4">Petunjuk: ${item.clue}</p>` : `<p class="text-lg text-gray-600 mb-4">Susun item-item berikut dalam urutan yang benar!</p>`}
+                            <ul id="rank-order-list" class="rank-order-list w-full max-w-md p-2">
+                                ${scrambledItems.map(text => `<li class="rank-order-item" draggable="true">${text}</li>`).join('')}
+                            </ul>
+                            <button id="submit-rank-order" class="btn mt-6 px-8 py-3 bg-indigo-600 text-white rounded-lg font-semibold">Kirim Jawaban</button>
+                        </div>
+                    `;
+                } else if (item.type === 'hangman') {
+                    contentHTML += `
+                        <div class="flex flex-col items-center text-center">
+                            <h3 class="text-2xl font-bold mb-4 text-indigo-700">Hangman Game</h3>
+                            <canvas id="hangman-canvas" width="200" height="200" class="border-2 border-gray-400 rounded-lg bg-gray-50"></canvas>
+                            <p id="hangman-word-display" class="font-mono text-3xl font-bold tracking-widest my-4"></p>
+                            <p id="hangman-clue" class="text-lg text-gray-600 italic mb-4"></p>
+                            <p id="hangman-message" class="text-lg font-semibold h-8"></p>
+                            <div id="hangman-keyboard" class="grid grid-cols-7 gap-1 mt-4 max-w-lg w-full"></div>
+                        </div>
+                    `;
+                }
+                gameArea.innerHTML = contentHTML;
+                if (item.type === 'picture-puzzle') {
+                    startPicturePuzzle(item, conn, itemStartTime);
+                } else if (item.type === 'un-jumble') {
+                    startUnjumbleGame(item, conn, itemStartTime);
+                } else if (item.type === 'wordsearch') {
+                    startWordsearchGame(item, conn, itemStartTime);
+                } else if (item.type === 'whack-a-mole') {
+                    startWhackAMoleGame(item, conn, itemStartTime);
+                } else if (item.type === 'rank-order') {
+                    startRankOrderGame(item, conn, itemStartTime);
+                } else if (item.type === 'hangman') {
+                    startHangmanGame(item, conn, itemStartTime);
+                }
+            }
+
+            window.submitAnswer = (selectedIndex) => {
+                const item = gameData[currentPage]; 
+                let isCorrect, userAnswer, correctAnswer, questionText;
+                
+                const attemptTime = Date.now() - itemStartTime;
+                item.totalTime += attemptTime;
+
+                if (item.type === 'mc') {
+                    isCorrect = selectedIndex === item.answer; 
+                    userAnswer = item.options[selectedIndex]; 
+                    correctAnswer = item.options[item.answer]; 
+                    questionText = item.question;
+                } else { // isian
+                    const input = document.getElementById('player-answer-input').value; 
+                    if (!input.trim()) return showMessageModal("Jawaban kosong!");
+                    isCorrect = input.trim().toLowerCase() === item.answer.trim().toLowerCase(); 
+                    userAnswer = input; 
+                    correctAnswer = item.answer; 
+                    questionText = item.clue;
+                }
+
+                if(isCorrect) {
+                    conn.send({ 
+                        type: 'updateProgress', 
+                        payload: { 
+                            progress: currentPage + 1, 
+                            lastAnswer: { 
+                                question: questionText, 
+                                userAnswer, 
+                                correctAnswer, 
+                                isCorrect, 
+                                type: item.type, 
+                                totalTime: item.totalTime
+                            } 
+                        } 
+                    });
+                    showFeedbackAndNext(isCorrect);
+                } else {
+                    conn.send({ 
+                        type: 'updateProgress', 
+                        payload: { 
+                            progress: currentPage, 
+                            lastAnswer: { 
+                                question: questionText, 
+                                userAnswer, 
+                                correctAnswer, 
+                                isCorrect, 
+                                type: item.type,
+                                totalTime: item.totalTime
+                            } 
+                        } 
+                    });
+                    showFeedbackAndNext(isCorrect);
+                }
+            };
+
+            function showFeedbackAndNext(isCorrect, customMessage) {
+                const message = customMessage || (isCorrect ? 'Benar! 🎉' : 'Salah!');
+                const color = isCorrect ? 'text-green-600' : 'text-red-600';
+                const item = gameData[currentPage];
+                const gameArea = document.getElementById('game-area-player');
+                
+                if (isCorrect) {
+                    gameArea.innerHTML = `<p class="text-4xl text-center font-bold p-16 ${color}">${message}</p>`;
+                    setTimeout(() => { currentPage++; renderCurrentItem(); }, 1500);
+                } else {
+                    if (item.type === 'mc' || item.type === 'fill-in') {
+                         gameArea.innerHTML = `<p class="text-4xl text-center font-bold p-16 ${color}">${message}</p>`;
+                         setTimeout(() => { renderCurrentItem(); }, 3000);
+                    } else if (item.type === 'picture-puzzle' || item.type === 'un-jumble' || item.type === 'rank-order') {
+                        // Game ini memungkinkan pemain untuk terus mencoba tanpa jeda 3 detik
+                        showMessageModal(message);
+                    }
+                }
+            }
+
+            function finishGame() { 
+                const completionTime = Date.now() - startTime;
+                conn.send({ type: 'finishGame', payload: { completionTime } });
+                document.getElementById('game-area-player').innerHTML = `<p class="text-2xl text-center font-bold text-green-600 p-8">Permainan selesai! Terima kasih!</p>`; 
+            }
+
+            function startPicturePuzzle(item, conn, startTime) {
+                const canvas = document.getElementById('puzzle-canvas'), ctx = canvas.getContext('2d');
+                const [cols, rows] = item.gridSize.split('x').map(Number);
+                const img = new Image();
+                img.crossOrigin = "Anonymous";
+                
+                img.src = item.imageUrl.startsWith('data:image') ? item.imageUrl : `https://proxy.cors.sh/${item.imageUrl}`;
+                
+                let pieces = [], pieceWidth, pieceHeight, selectedPiece = null;
+                const picturePuzzleStartTime = startTime || Date.now();
+
+                img.onload = () => {
+                    pieceWidth = canvas.width / cols; pieceHeight = canvas.height / rows;
+                    for (let i = 0; i < rows * cols; i++) {
+                        const sx = i % cols;
+                        const sy = Math.floor(i / cols);
+                        const pos = item.shuffledOrder[i];
+                        pieces.push({ sx, sy, dx: pos.dx, dy: pos.dy, correctX: sx, correctY: sy });
+                    }
+                    drawPuzzle();
+                };
+                img.onerror = () => { ctx.fillStyle = 'red'; ctx.font = '16px Poppins'; ctx.fillText('Gagal memuat gambar.', 20, 40); };
+
+                function drawPuzzle() {
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    pieces.forEach(p => {
+                        ctx.drawImage(img, p.sx * (img.width/cols), p.sy * (img.height/rows), img.width/cols, img.height/rows, p.dx * pieceWidth, p.dy * pieceHeight, pieceWidth, pieceHeight);
+                        ctx.strokeRect(p.dx * pieceWidth, p.dy * pieceHeight, pieceWidth, pieceHeight);
+                    });
+                }
+
+                canvas.addEventListener('click', (e) => {
+                    const rect = canvas.getBoundingClientRect();
+                    const x = Math.floor((e.clientX - rect.left) / pieceWidth), y = Math.floor((e.clientY - rect.top) / pieceHeight);
+                    const clickedPiece = pieces.find(p => p.dx === x && p.dy === y);
+                    if (!selectedPiece) {
+                        selectedPiece = clickedPiece;
+                        ctx.fillStyle = 'rgba(255, 255, 0, 0.5)';
+                        ctx.fillRect(selectedPiece.dx * pieceWidth, selectedPiece.dy * pieceHeight, pieceWidth, pieceHeight);
+                    } else {
+                        if (selectedPiece !== clickedPiece) {
+                            [selectedPiece.dx, clickedPiece.dx] = [clickedPiece.dx, selectedPiece.dx];
+                            [selectedPiece.dy, clickedPiece.dy] = [clickedPiece.dy, selectedPiece.dy];
+                        }
+                        selectedPiece = null;
+                        drawPuzzle();
+                    }
+                });
+
+                document.getElementById('submit-puzzle-btn').onclick = function() {
+                    const isWin = pieces.every(p => p.dx === p.correctX && p.dy === p.correctY);
+                    
+                    const attemptTime = Date.now() - picturePuzzleStartTime;
+                    item.totalTime += attemptTime;
+
+                    if (isWin) {
+                        conn.send({ 
+                            type: 'updateProgress', 
+                            payload: { 
+                                progress: currentPage + 1, 
+                                lastAnswer: { 
+                                    question: `Puzzle Gambar`, 
+                                    userAnswer: 'Selesai', 
+                                    correctAnswer: 'Selesai', 
+                                    isCorrect: true, 
+                                    type: item.type, 
+                                    points: 10,
+                                    totalTime: item.totalTime
+                                } 
+                            } 
+                        });
+                        showFeedbackAndNext(true, "Puzzle Lengkap!");
+                    } else {
+                         conn.send({ 
+                            type: 'updateProgress', 
+                            payload: { 
+                                progress: currentPage, 
+                                lastAnswer: { 
+                                    question: `Puzzle Gambar`, 
+                                    userAnswer: 'Tidak Selesai', 
+                                    correctAnswer: 'Selesai', 
+                                    isCorrect: false, 
+                                    type: item.type,
+                                    points: 0,
+                                    totalTime: item.totalTime
+                                } 
+                            } 
+                        });
+                        showMessageModal('Masih salah, coba lagi!');
+                    }
+                };
+            }
+            
+            function startUnjumbleGame(item, conn, startTime) {
+                const unjumbleContainer = document.getElementById('un-jumble-container');
+                const answerDisplay = document.getElementById('un-jumble-answer-display');
+                const submitBtn = document.getElementById('submit-un-jumble');
+                const resetBtn = document.getElementById('reset-un-jumble');
+
+                let pieces = [];
+                const unjumbleStartTime = startTime || Date.now();
+
+                unjumbleContainer.addEventListener('click', (e) => {
+                    const clickedElement = e.target.closest('.un-jumble-piece');
+                    if (clickedElement) {
+                        const pieceText = clickedElement.textContent;
+                        pieces.push(pieceText);
+                        answerDisplay.innerHTML += `<span class="px-4 py-2 border rounded-full bg-indigo-50 text-indigo-700">${pieceText}</span>`;
+                        clickedElement.style.display = 'none';
+                    }
+                });
+
+                resetBtn.addEventListener('click', () => {
+                    pieces.length = 0;
+                    answerDisplay.innerHTML = '';
+                    document.querySelectorAll('.un-jumble-piece').forEach(el => el.style.display = 'inline-block');
+                });
+
+                submitBtn.addEventListener('click', () => {
+                    const userAnswer = pieces.join(item.unjumbleType === 'word' ? '' : ' ');
+                    const isCorrect = userAnswer.toLowerCase() === item.answer.toLowerCase();
+
+                    const attemptTime = Date.now() - unjumbleStartTime;
+                    item.totalTime += attemptTime;
+
+                    if (isCorrect) {
+                        conn.send({ 
+                            type: 'updateProgress', 
+                            payload: { 
+                                progress: currentPage + 1,
+                                lastAnswer: { 
+                                    question: `Unjumble: ${item.scrambled}`, 
+                                    userAnswer: userAnswer, 
+                                    correctAnswer: item.answer, 
+                                    isCorrect: isCorrect, 
+                                    type: item.type,
+                                    points: 10,
+                                    totalTime: item.totalTime
+                                }
+                            } 
+                        });
+                        showFeedbackAndNext(isCorrect, 'Urutan Benar! 🎉');
+                    } else {
+                         conn.send({ 
+                            type: 'updateProgress', 
+                            payload: { 
+                                progress: currentPage,
+                                lastAnswer: { 
+                                    question: `Unjumble: ${item.scrambled}`, 
+                                    userAnswer: userAnswer, 
+                                    correctAnswer: item.answer, 
+                                    isCorrect: isCorrect, 
+                                    type: item.type,
+                                    points: 0,
+                                    totalTime: item.totalTime // Kirim waktu akumulasi saat ini
+                                }
+                            }
+                        });
+                        
+                        showMessageModal('Urutan salah, coba lagi!');
+                    }
+                });
+            }
+
+            function startWordsearchGame(item, conn, startTime) {
+                const gridEl = document.getElementById('wordsearch-grid');
+                const wordListEl = document.getElementById('wordsearch-list');
+                const statusEl = document.getElementById('wordsearch-status');
+
+                let selectedCells = [];
+                let isDragging = false;
+                let foundWords = new Set();
+                const gridData = item.grid;
+                const wordsToFind = item.words;
+                const wordsearchStartTime = startTime || Date.now();
+
+
+                // Tampilkan grid
+                gridEl.innerHTML = '';
+                gridData.forEach((row, y) => {
+                    row.forEach((letter, x) => {
+                        const cell = document.createElement('div');
+                        cell.className = 'grid-cell';
+                        cell.textContent = letter;
+                        cell.dataset.x = x;
+                        cell.dataset.y = y;
+                        gridEl.appendChild(cell);
+                    });
+                });
+
+                // Logic untuk seleksi
+                gridEl.addEventListener('pointerdown', (e) => {
+                    e.preventDefault();
+                    isDragging = true;
+                    selectedCells = [];
+                    const startCell = e.target.closest('.grid-cell');
+                    if (startCell) {
+                        selectedCells.push(startCell);
+                        startCell.classList.add('selected');
+                    }
+                });
+
+                gridEl.addEventListener('pointerover', (e) => {
+                    if (!isDragging) return;
+                    const hoverCell = e.target.closest('.grid-cell');
+                    if (!hoverCell) return;
+
+                    const startCell = selectedCells[0];
+                    if (!startCell) return;
+
+                    // Un-highlight previous path
+                    document.querySelectorAll('.grid-cell.selected').forEach(cell => cell.classList.remove('selected'));
+                    
+                    // Get current path
+                    const path = getPath(startCell, hoverCell);
+                    path.forEach(cell => cell.classList.add('selected'));
+                    selectedCells = path;
+                });
+
+                gridEl.addEventListener('pointerup', (e) => {
+                    isDragging = false;
+                    
+                    if (selectedCells.length < 2) {
+                        document.querySelectorAll('.grid-cell.selected').forEach(cell => cell.classList.remove('selected'));
+                        return;
+                    }
+
+                    const selectedWord = selectedCells.map(cell => cell.textContent).join('');
+                    const reversedWord = selectedCells.map(cell => cell.textContent).reverse().join('');
+                    
+                    let foundWord = false;
+                    if (wordsToFind.includes(selectedWord) && !foundWords.has(selectedWord)) {
+                        foundWord = selectedWord;
+                    } else if (wordsToFind.includes(reversedWord) && !foundWords.has(reversedWord)) {
+                        foundWord = reversedWord;
+                    }
+                    
+                    const attemptTime = Date.now() - wordsearchStartTime;
+                    item.totalTime += attemptTime;
+
+                    if (foundWord) {
+                        foundWords.add(foundWord);
+                        selectedCells.forEach(cell => cell.classList.add('word-found'));
+                        const foundWordEl = document.querySelector(`.wordsearch-word[data-word="${foundWord}"]`) || document.querySelector(`.wordsearch-word[data-word="${reversedWord}"]`);
+                        if (foundWordEl) {
+                             foundWordEl.classList.add('found');
+                        }
+                        
+                        statusEl.textContent = `Ditemukan: ${foundWord}`;
+                        statusEl.style.color = '#10b981';
+                        
+                        conn.send({ 
+                            type: 'updateProgress', 
+                            payload: { 
+                                progress: currentPage, 
+                                lastAnswer: { 
+                                    question: `Wordsearch`, 
+                                    userAnswer: foundWord, 
+                                    correctAnswer: foundWord, 
+                                    isCorrect: true, 
+                                    type: item.type,
+                                    points: 5,
+                                    totalTime: item.totalTime
+                                } 
+                            } 
+                        });
+
+                        if (foundWords.size === wordsToFind.length) {
+                            setTimeout(() => {
+                                conn.send({ 
+                                    type: 'updateProgress', 
+                                    payload: { 
+                                        progress: currentPage + 1,
+                                        lastAnswer: { 
+                                            question: `Wordsearch`, 
+                                            userAnswer: 'Semua kata ditemukan', 
+                                            correctAnswer: 'Selesai', 
+                                            isCorrect: true, 
+                                            type: item.type,
+                                            points: 20,
+                                            totalTime: item.totalTime
+                                        } 
+                                    } 
+                                });
+                                showFeedbackAndNext(true, "Wordsearch Selesai!");
+                            }, 1000);
+                        } else {
+                            setTimeout(() => {
+                                statusEl.textContent = '';
+                                statusEl.style.color = '';
+                            }, 1500);
+                        }
+                    } else {
+                        statusEl.textContent = `Bukan kata yang benar. Coba lagi!`;
+                        statusEl.style.color = '#EF4444';
+
+                        conn.send({ 
+                            type: 'updateProgress', 
+                            payload: { 
+                                progress: currentPage, 
+                                lastAnswer: { 
+                                    question: `Wordsearch`, 
+                                    userAnswer: selectedWord, 
+                                    correctAnswer: null, 
+                                    isCorrect: false, 
+                                    type: item.type,
+                                    points: 0,
+                                    totalTime: item.totalTime
+                                } 
+                            } 
+                        });
+
+                        setTimeout(() => {
+                            statusEl.textContent = '';
+                            statusEl.style.color = '';
+                            document.querySelectorAll('.grid-cell.selected').forEach(cell => cell.classList.remove('selected'));
+                            selectedCells = [];
+                        }, 1500);
+                    }
+                    
+                    document.querySelectorAll('.grid-cell.selected').forEach(cell => cell.classList.remove('selected'));
+                    selectedCells = [];
+                });
+
+                function getPath(start, end) {
+                    const startX = parseInt(start.dataset.x);
+                    const startY = parseInt(start.dataset.y);
+                    const endX = parseInt(end.dataset.x);
+                    const endY = parseInt(end.dataset.y);
+
+                    const dx = endX - startX;
+                    const dy = endY - startY;
+
+                    const absDx = Math.abs(dx);
+                    const absDy = Math.abs(dy);
+
+                    if (absDx !== absDy && dx !== 0 && dy !== 0) {
+                        return [start]; // Not a straight line
+                    }
+
+                    const path = [];
+                    const stepX = dx === 0 ? 0 : dx / absDx;
+                    const stepY = dy === 0 ? 0 : dy / absDy;
+                    
+                    let currX = startX;
+                    let currY = startY;
+
+                    while (true) {
+                        const nextCell = document.querySelector(`[data-x="${currX}"][data-y="${currY}"]`);
+                        if(nextCell){
+                            path.push(nextCell);
+                        }
+                        if (currX === endX && currY === endY) break;
+                        currX += stepX;
+                        currY += stepY;
+                    }
+                    return path;
+                }
+            }
+
+            // Whack-a-Mole Game Logic
+            function startWhackAMoleGame(item, conn, startTime) {
+                const grid = document.getElementById('whack-a-mole-grid');
+                const scoreEl = document.getElementById('whack-a-mole-score');
+                const clueEl = document.getElementById('whack-a-mole-clue');
+                
+                let score = 0;
+                const whackAMoleStartTime = startTime || Date.now();
+                
+                function setupGrid() {
+                    grid.innerHTML = '';
+                    for (let i = 0; i < 9; i++) {
+                        const hole = document.createElement('div');
+                        hole.className = 'mole-hole';
+                        hole.dataset.index = i;
+                        hole.appendChild(document.createElement('div'));
+                        grid.appendChild(hole);
+                    }
+                }
+
+                function spawnMoles() {
+                    const allAnswers = [item.correctAnswer, ...item.incorrectAnswers];
+                    
+                    // Shuffle all answers to randomize their position
+                    for (let i = allAnswers.length - 1; i > 0; i--) {
+                        const j = Math.floor(Math.random() * (i + 1));
+                        [allAnswers[i], allAnswers[j]] = [allAnswers[j], allAnswers[i]];
+                    }
+
+                    const holes = document.querySelectorAll('.mole-hole');
+                    holes.forEach((hole, index) => {
+                        let moleContent;
+                        // Gunakan cara yang aman untuk mendapatkan jawaban, jika panjang array tidak cocok
+                        if (index < allAnswers.length) {
+                             moleContent = allAnswers[index];
+                        } else {
+                            moleContent = "---";
+                        }
+                        
+                        const isCorrect = (moleContent === item.correctAnswer);
+
+                        const moleEl = hole.querySelector('.mole');
+                        if (moleEl) {
+                           moleEl.textContent = moleContent;
+                           moleEl.dataset.isCorrect = isCorrect;
+                           setTimeout(() => moleEl.classList.add('up'), 50);
+                        } else {
+                           const newMoleEl = document.createElement('div');
+                           newMoleEl.className = 'mole';
+                           newMoleEl.textContent = moleContent;
+                           newMoleEl.dataset.isCorrect = isCorrect;
+                           hole.appendChild(newMoleEl);
+                           setTimeout(() => newMoleEl.classList.add('up'), 50);
+                        }
+                    });
+                }
+                
+                function handleMoleClick(e) {
+                    const mole = e.target.closest('.mole');
+                    if (!mole) return;
+                    
+                    const isCorrect = mole.dataset.isCorrect === 'true';
+
+                    if (isCorrect) {
+                        score += 10;
+                        scoreEl.textContent = score;
+                        endQuestion(true, mole.textContent);
+                    } else {
+                        score = Math.max(0, score - 5);
+                        scoreEl.textContent = score;
+                        endQuestion(false, mole.textContent);
+                    }
+                    mole.classList.remove('up');
+                }
+
+                function endQuestion(isCorrect, userAnswer) {
+                    const attemptTime = Date.now() - itemStartTime;
+                    item.totalTime += attemptTime;
+
+                    if (isCorrect) {
+                        conn.send({ 
+                            type: 'updateProgress', 
+                            payload: { 
+                                progress: currentPage + 1,
+                                lastAnswer: { 
+                                    question: item.clue, 
+                                    userAnswer: userAnswer, 
+                                    correctAnswer: item.correctAnswer, 
+                                    isCorrect: true, 
+                                    type: item.type,
+                                    points: 10,
+                                    totalTime: item.totalTime
+                                } 
+                            } 
+                        });
+                        showFeedbackAndNext(true, 'Jawaban benar! 🎉');
+                    } else {
+                        conn.send({ 
+                            type: 'updateProgress', 
+                            payload: { 
+                                progress: currentPage,
+                                lastAnswer: { 
+                                    question: item.clue, 
+                                    userAnswer: userAnswer, 
+                                    correctAnswer: item.correctAnswer, 
+                                    isCorrect: false, 
+                                    type: item.type,
+                                    points: 0,
+                                    totalTime: item.totalTime
+                                }
+                            } 
+                        });
+                        showFeedbackAndNext(false, 'Jawaban salah. Coba lagi!');
+                    }
+                }
+
+                clueEl.textContent = item.clue;
+                setupGrid();
+                spawnMoles();
+
+                grid.addEventListener('click', handleMoleClick);
+            }
+            
+            // Rank Order Game Logic
+            function startRankOrderGame(item, conn, startTime) {
+                const listEl = document.getElementById('rank-order-list');
+                const submitBtn = document.getElementById('submit-rank-order');
+                
+                let draggedItem = null;
+                const rankOrderStartTime = startTime || Date.now();
+
+                listEl.addEventListener('dragstart', (e) => {
+                    draggedItem = e.target;
+                    e.dataTransfer.effectAllowed = 'move';
+                    setTimeout(() => {
+                        draggedItem.classList.add('dragging');
+                    }, 0);
+                });
+
+                listEl.addEventListener('dragover', (e) => {
+                    e.preventDefault();
+                    const targetItem = e.target.closest('.rank-order-item');
+                    if (targetItem && targetItem !== draggedItem) {
+                        const allItems = [...listEl.children];
+                        const draggedIndex = allItems.indexOf(draggedItem);
+                        const targetIndex = allItems.indexOf(targetItem);
+                        
+                        if (draggedIndex < targetIndex) {
+                            listEl.insertBefore(draggedItem, targetItem.nextSibling);
+                        } else {
+                            listEl.insertBefore(draggedItem, targetItem);
+                        }
+                    }
+                });
+
+                listEl.addEventListener('dragend', () => {
+                    if (draggedItem) {
+                        draggedItem.classList.remove('dragging');
+                        draggedItem = null;
+                    }
+                });
+                
+                submitBtn.addEventListener('click', () => {
+                    const currentOrder = [...listEl.children].map(li => li.textContent);
+                    const isCorrect = JSON.stringify(currentOrder) === JSON.stringify(item.items);
+                    
+                    // Akumulasi waktu percobaan
+                    const attemptTime = Date.now() - rankOrderStartTime;
+                    item.totalTime += attemptTime;
+
+                    if (isCorrect) {
+                        conn.send({ 
+                            type: 'updateProgress', 
+                            payload: { 
+                                progress: currentPage + 1,
+                                lastAnswer: { 
+                                    question: `Urutan Kata`, 
+                                    userAnswer: currentOrder.join(', '), 
+                                    correctAnswer: item.items.join(', '), 
+                                    isCorrect: isCorrect, 
+                                    type: item.type,
+                                    points: 10,
+                                    totalTime: item.totalTime
+                                }
+                            } 
+                        });
+                        showFeedbackAndNext(isCorrect, 'Urutan Benar! 🎉');
+                    } else {
+                        conn.send({ 
+                            type: 'updateProgress', 
+                            payload: { 
+                                progress: currentPage,
+                                lastAnswer: { 
+                                    question: `Urutan Kata`, 
+                                    userAnswer: currentOrder.join(', '), 
+                                    correctAnswer: item.items.join(', '), 
+                                    isCorrect: isCorrect, 
+                                    type: item.type,
+                                    points: 0,
+                                    totalTime: item.totalTime // Kirim waktu akumulasi saat ini
+                                }
+                            }
+                        });
+                        
+                        showMessageModal('Urutan salah, coba lagi!');
+                    }
+                });
+            }
+
+            function startHangmanGame(item, conn, startTime) {
+                const canvas = document.getElementById("hangman-canvas");
+                const ctx = canvas.getContext("2d");
+                const wordDisplay = document.getElementById("hangman-word-display");
+                const clueDisplay = document.getElementById("hangman-clue");
+                const messageDisplay = document.getElementById("hangman-message");
+                const keyboard = document.getElementById("hangman-keyboard");
+
+                const selectedWord = item.word;
+                const selectedClue = item.clue;
+                let guessedLetters = [];
+                let mistakes = 0;
+                const maxMistakes = 6;
+                let hangmanStartTime = startTime || Date.now();
+                
+                function setupNewRound() {
+                    guessedLetters = [];
+                    mistakes = 0;
+                    hangmanStartTime = Date.now();
+                    updateWordDisplay();
+                    drawHangman();
+                    createKeyboard();
+                    messageDisplay.textContent = "";
+                    messageDisplay.classList.remove('text-green-600', 'text-red-600');
+                }
+
+                function updateWordDisplay() {
+                    wordDisplay.textContent = selectedWord
+                        .split("")
+                        .map(letter => guessedLetters.includes(letter) ? letter : "_")
+                        .join(" ");
+                }
+
+                function drawHangman() {
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    ctx.lineWidth = 2;
+                    ctx.strokeStyle = "#000";
+
+                    // Base
+                    ctx.beginPath(); ctx.moveTo(20, 180); ctx.lineTo(180, 180); ctx.stroke();
+                    // Pole
+                    ctx.beginPath(); ctx.moveTo(50, 180); ctx.lineTo(50, 20); ctx.stroke();
+                    // Beam
+                    ctx.beginPath(); ctx.moveTo(50, 20); ctx.lineTo(120, 20); ctx.stroke();
+                    // Rope
+                    ctx.beginPath(); ctx.moveTo(120, 20); ctx.lineTo(120, 40); ctx.stroke();
+
+                    if (mistakes > 0) { // Head
+                        ctx.beginPath(); ctx.arc(120, 60, 20, 0, Math.PI * 2); ctx.stroke();
+                    }
+                    if (mistakes > 1) { // Body
+                        ctx.beginPath(); ctx.moveTo(120, 80); ctx.lineTo(120, 120); ctx.stroke();
+                    }
+                    if (mistakes > 2) { // Left Arm
+                        ctx.beginPath(); ctx.moveTo(120, 90); ctx.lineTo(100, 110); ctx.stroke();
+                    }
+                    if (mistakes > 3) { // Right Arm
+                        ctx.beginPath(); ctx.moveTo(120, 90); ctx.lineTo(140, 110); ctx.stroke();
+                    }
+                    if (mistakes > 4) { // Left Leg
+                        ctx.beginPath(); ctx.moveTo(120, 120); ctx.lineTo(100, 150); ctx.stroke();
+                    }
+                    if (mistakes > 5) { // Right Leg
+                        ctx.beginPath(); ctx.moveTo(120, 120); ctx.lineTo(140, 150); ctx.stroke();
+                    }
+                }
+
+                function createKeyboard() {
+                    keyboard.innerHTML = "";
+                    for (let i = 65; i <= 90; i++) {
+                        const letter = String.fromCharCode(i);
+                        const button = document.createElement("button");
+                        button.textContent = letter;
+                        button.className = "key w-full aspect-square";
+                        button.addEventListener("click", () => guessLetter(letter, button));
+                        keyboard.appendChild(button);
+                    }
+                }
+
+                function guessLetter(letter, button) {
+                    if (button.disabled) return;
+                    
+                    // Menonaktifkan tombol yang ditekan
+                    button.disabled = true;
+
+                    // Tambahkan huruf yang ditebak ke daftar
+                    if (!guessedLetters.includes(letter)) {
+                        guessedLetters.push(letter);
+                    }
+
+                    const isCorrectGuess = selectedWord.includes(letter);
+                    if (!isCorrectGuess) {
+                        mistakes++;
+                        drawHangman();
+                    }
+                    
+                    updateWordDisplay();
+                    checkGameStatus(isCorrectGuess, letter);
+                }
+
+                function checkGameStatus(isCorrectGuess, lastGuessedLetter) {
+                    const currentWord = wordDisplay.textContent.replace(/ /g, '');
+                    const isWin = currentWord === selectedWord;
+                    const isLose = mistakes >= maxMistakes;
+                    
+                    const attemptTime = Date.now() - hangmanStartTime;
+                    item.totalTime += attemptTime;
+
+                    if (isWin) {
+                        messageDisplay.textContent = "Selamat! Anda menang!";
+                        messageDisplay.classList.add('text-green-600');
+                        
+                        keyboard.querySelectorAll('.key').forEach(btn => btn.disabled = true);
+                        
+                        conn.send({ 
+                            type: 'updateProgress', 
+                            payload: { 
+                                progress: currentPage + 1,
+                                lastAnswer: {
+                                    question: `Hangman: ${selectedWord}`,
+                                    userAnswer: 'Menang',
+                                    correctAnswer: selectedWord,
+                                    isCorrect: true,
+                                    type: item.type,
+                                    points: 10,
+                                    totalTime: item.totalTime
+                                }
+                            }
+                        });
+
+                        setTimeout(() => { currentPage++; renderCurrentItem(); }, 3000);
+                    } else if (isLose) {
+                        messageDisplay.textContent = `Game Over! Kata yang benar adalah ${selectedWord} (${selectedClue})`;
+                        messageDisplay.classList.add('text-red-600');
+                        
+                        keyboard.querySelectorAll('.key').forEach(btn => btn.disabled = true);
+                        
+                        conn.send({ 
+                            type: 'updateProgress', 
+                            payload: { 
+                                progress: currentPage, // Progres tidak bertambah, jadi pemain mengulang soal yang sama
+                                lastAnswer: {
+                                    question: `Hangman: ${selectedWord}`,
+                                    userAnswer: `Kalah (Tebakan terakhir: ${lastGuessedLetter})`,
+                                    correctAnswer: selectedWord,
+                                    isCorrect: false,
+                                    type: item.type,
+                                    points: 0,
+                                    totalTime: item.totalTime
+                                }
+                            }
+                        });
+
+                        setTimeout(() => { renderCurrentItem(); }, 3000); // Mengulang item yang sama setelah 3 detik
+                    } else if (isCorrectGuess) {
+                        conn.send({ 
+                            type: 'updateProgress', 
+                            payload: { 
+                                progress: currentPage,
+                                lastAnswer: {
+                                    question: `Hangman: ${selectedWord}`,
+                                    userAnswer: lastGuessedLetter,
+                                    correctAnswer: selectedWord,
+                                    isCorrect: true,
+                                    type: item.type,
+                                    points: 1, // Point for each correct letter
+                                    totalTime: item.totalTime
+                                }
+                            }
+                        });
+                    } else {
+                        conn.send({ 
+                            type: 'updateProgress', 
+                            payload: { 
+                                progress: currentPage,
+                                lastAnswer: {
+                                    question: `Hangman: ${selectedWord}`,
+                                    userAnswer: lastGuessedLetter,
+                                    correctAnswer: selectedWord,
+                                    isCorrect: false,
+                                    type: item.type,
+                                    points: 0,
+                                    totalTime: item.totalTime
+                                }
+                            }
+                        });
+                    }
+                }
+
+                clueDisplay.textContent = `Petunjuk: ${selectedClue}`;
+                updateWordDisplay();
+                drawHangman();
+                createKeyboard();
+                messageDisplay.textContent = "";
+                messageDisplay.classList.remove('text-green-600', 'text-red-600');
+            }
+            
+            renderCurrentItem();
+        }
+
+        // --- Fungsi Modal & PDF ---
+        function showResultModal(data) { displayDetailedResults(modalContentBody, data); downloadPdfBtn.onclick = () => downloadPDF(data.name); resultModal.classList.remove('hidden'); }
+        function closeResultModal() { resultModal.classList.add('hidden'); }
+        function downloadPDF(studentName) {
+            const { jsPDF } = window.jspdf; const contentToPrint = document.getElementById('modal-content-body');
+            html2canvas(contentToPrint, { scale: 2, useCORS: true }).then(canvas => {
+                const imgData = canvas.toDataURL('image/png'), pdf = new jsPDF('p', 'mm', 'a4');
+                const pdfWidth = pdf.internal.pageSize.getWidth(), pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+                pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight); pdf.save(`Hasil Permainan - ${studentName}.pdf`);
+            });
+        }
+        function displayDetailedResults(container, data, clearContainer = true) {
+            if (clearContainer) {
+                container.innerHTML = '';
+            }
+            
+            const mainReport = document.createElement('div');
+            mainReport.innerHTML = `
+                <div class="text-center bg-white p-6 rounded-lg shadow-md mb-8">
+                    <h2 class="text-2xl font-bold text-center mb-2 text-gray-800">Laporan Hasil Permainan</h2>
+                    <p class="text-xl font-semibold">${data.name}</p>
+                    <p class="text-lg font-semibold mt-4">Skor Akhir:</p>
+                    <p class="text-6xl font-bold text-green-600 my-2">${data.score}</p>
+                </div>
+            `;
+            container.appendChild(mainReport);
+
+            const detailsContainer = document.createElement('div'); detailsContainer.className = 'space-y-4';
+            data.answers.forEach((item, index) => {
+                const resultItem = document.createElement('div');
+                resultItem.className = `p-4 rounded-lg border-l-4 ${item.isCorrect ? 'border-green-500 bg-green-50' : 'border-red-500 bg-red-50'}`;
+                const answerHTML = item.isCorrect ? `<p class="mt-2 text-green-700 font-semibold">Jawaban: ${item.userAnswer} (Benar)</p>` : `<p class="mt-2 text-red-700 font-semibold">Jawabanmu: ${item.userAnswer} (Salah)</p><p class="mt-1 text-blue-700 font-semibold">Jawaban Benar: ${item.correctAnswer}</p>`;
+                
+                // Tambahkan total waktu Rank Order dan Unjumble jika tersedia
+                let timeHTML = '';
+                if ((item.type === 'rank-order' || item.type === 'un-jumble' || item.type === 'mc' || item.type === 'fill-in' || item.type === 'picture-puzzle' || item.type === 'wordsearch' || item.type === 'whack-a-mole' || item.type === 'hangman') && item.totalTime !== undefined) {
+                    timeHTML = `<p class="mt-1 text-sm text-gray-500">Waktu yang dihabiskan: ${formatTime(item.totalTime)}</p>`;
+                }
+                // Tambahkan petunjuk jika ada
+                let clueHTML = '';
+                if (item.type === 'wordsearch' && item.clue) {
+                    clueHTML = `<p class="mt-1 text-sm text-gray-500">Petunjuk: ${item.clue}</p>`;
+                } else if (item.type === 'whack-a-mole') {
+                    clueHTML = `<p class="mt-1 text-sm text-gray-500">Petunjuk: ${item.question}</p>`;
+                } else if (item.type === 'rank-order' && item.clue) {
+                    clueHTML = `<p class="mt-1 text-sm text-gray-500">Petunjuk: ${item.clue}</p>`;
+                } else if (item.type === 'hangman' && item.clue) {
+                    clueHTML = `<p class="mt-1 text-sm text-gray-500">Petunjuk: ${item.clue}</p>`;
+                }
+                
+                resultItem.innerHTML = `<p class="font-bold">${index + 1}. ${item.question}</p>${answerHTML}${clueHTML}${timeHTML}`;
+                detailsContainer.appendChild(resultItem);
+            });
+            container.appendChild(detailsContainer);
+        }
+    </script>
+</body>
+</html>
